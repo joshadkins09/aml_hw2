@@ -124,8 +124,10 @@ class SVM:
         self.lam = lam
         self.m = m
         self.n = n
-        self.a = 0
-        self.b = 0
+        self.a_initial = np.random.rand(6)
+        self.b_initial = np.random.rand(1)[0]
+        self.a = self.a_initial
+        self.b = self.b_initial
         self.accuracy = list()
 
     def reset(self):
@@ -238,23 +240,29 @@ def main():
     train_labels, train_data, validation_labels, validation_data = load_train_data(
         'train.txt', True)
 
-    # print results of training on validation set
-    for lam in [.0001, .001, .01, .1, 1]:
-        svm = SVM(lam, 9, 10)
-        svm.fit(train_data, train_labels)
-        predictions = [svm.predict(x) for x in validation_data]
-        v = [(a, b) for a, b in zip(predictions, validation_labels) if a == b]
-        print(len(v) / len(validation_labels))
-        # pprint(svm.accuracy)
-
-    # # takes lambda, m, n for calculating eta (learning rate)
+    # this is for seeing accuracy with varied lambda
     # svm = SVM(1, 1, 2)
-    # data = np.concatenate((train_data, validation_data))
-    # labels = np.concatenate((train_labels, validation_labels))
+    # print(svm.a_initial, svm.b_initial)
+    # # print results of training on validation set
+    # for lam in [.0001, .001, .01, .1, 1]:
+    #     svm.lam = lam
+    #     svm.fit(train_data, train_labels)
+    #     predictions = [svm.predict(x) for x in validation_data]
+    #     v = [(a, b) for a, b in zip(predictions, validation_labels) if a == b]
+    #     print(len(v) / len(validation_labels))
+    #     # pprint(svm.accuracy)
 
-    # svm.fancy_fit(data, labels, num_seasons=50)
-    # real_test_data = load_test_data('test.txt', False)
-    # generate_submission(svm, real_test_data)
+    # this is for the submission.txt
+    # takes lambda, m, n for calculating eta (learning rate)
+    svm = SVM(.001, 1, 2)
+    svm.a = np.array([0.77939948, 0.85269224, 0.21391138, 0.88460607, 0.47162305, 0.54078254])
+    svm.b = 0.03354322864033388
+    data = np.concatenate((train_data, validation_data))
+    labels = np.concatenate((train_labels, validation_labels))
+
+    svm.fancy_fit(data, labels, num_seasons=50)
+    real_test_data = load_test_data('test.txt', False)
+    generate_submission(svm, real_test_data)
 
 
 if __name__ == "__main__":
