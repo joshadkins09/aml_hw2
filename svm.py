@@ -1,34 +1,6 @@
 #!/usr/bin/env python
-'''
-u, c = np.unique(train_labels, return_counts=True)
-acc = dict(zip(u, c))# / len(test_data)
-print(acc)
-
-Procedure: 4.1 Training an SVM: Overall
-
-Start with a dataset containing N pairs (xi, yi). Each xi is a d- dimensional
-feature vector, and each yi is a label, either 1 or −1. Optionally, rescale the
-xi so that each component has unit variance. Choose a set of possible values of
-the regularization weight λ. Separate the dataset into two sets: test and
-training. Reserve the test set. For each value of the regularization weight,
-use the training set to estimate the accuracy of an SVM with that λ value,
-using cross-validation as in procedure 4.2 and stochastic gradient descent. Use
-this information to choose λ0, the best value of λ (usually, the one that
-yields the highest accuracy). Now use the training set to fit the best SVM
-using λ0 as the regularization constant. Finally, use the test set to compute
-the accuracy or error rate of that SVM, and report that
-
-Procedure: 4.2 Training an SVM: estimating the accuracy
-
-Repeatedly: split the training dataset into two components (training and
-validation), at random; use the training component to train an SVM; and compute
-the accuracy on the validation component. Now average the resulting accuracy
-values.
-
-'''
 
 import fileinput
-import math
 import random
 import sys
 
@@ -108,7 +80,7 @@ def load_train_data(filename, include_labels=True):
 
 def load_test_data(filename, include_labels=True):
     data = load_data_from_file(filename, include_labels)
-    # preprocess
+    # should we preprocess the test data? bad data if we don't -jadkins
     data = preprocess(data)
     return np.array(data)
 
@@ -116,6 +88,7 @@ def load_test_data(filename, include_labels=True):
 ###############################################################################
 
 
+# could use sklearn.preprocessing.scale for this -jadkins
 def preprocess(data):
     mean = np.mean(data, axis=0)
     centered = data - mean
@@ -153,11 +126,18 @@ class SVM:
         self.n = n
         self.a = 0
         self.b = 0
+        self.accuracy = list()
+
+    def reset(self):
+        self.a = 0
+        self.b = 0
+        self.accuracy = list()
 
     def f(self, x):
         return np.dot(self.a, x) + self.b
 
     def eta(self, current_step):
+        # return .1
         return (self.m / (current_step + self.n))
 
     # this may be private
@@ -194,11 +174,14 @@ class SVM:
         j = [(i, j) for i, j in zip(res, holdout_labels) if i == j]
         return (len(j) / len(holdout_labels))
 
+    # NOTE: before turning in, need to separate out sgd from fit -jadkins
     def fit(self, train_data, train_labels, num_seasons=50, num_steps=300):
+        self.reset()
         self.a = self.a * np.zeros([len(train_data[0])])
 
         zipped = list(zip(train_data, train_labels))
         for season in range(num_seasons):
+            sac = list()
             # definitely should make sure that all this wizardry works -jadkins
             np.random.shuffle(zipped)
             holdout_data, holdout_labels = zip(*zipped[:50])
@@ -210,8 +193,10 @@ class SVM:
                                            step)
 
                 if step % 30 == 0:
-                    self.measure_accuracy(self.a, self.b, holdout_data,
-                                          holdout_labels)
+                    acc = self.measure_accuracy(self.a, self.b, holdout_data,
+                                                holdout_labels)
+                    sac.append(acc)
+            self.accuracy.append(sac)
 
     def fancy_fit(self,
                   train_data,
@@ -233,7 +218,7 @@ class SVM:
 
 def fmt_for_sub(val):
     if val == 1:
-        return '>50k'
+        return '>50K'
     elif val == -1:
         return '<=50K'
     else:
@@ -250,24 +235,26 @@ def generate_submission(clf, data):
 
 def main():
     # print('running')
-    train_labels, train_data, test_labels, test_data = load_train_data(
+    train_labels, train_data, validation_labels, validation_data = load_train_data(
         'train.txt', True)
 
-    # for lam in [.0001, .001, .01, .1, 1]:
-    #     svm = SVM(lam, 9, 10)
-    #     svm.fit(train_data, train_labels)
-    #     predictions = [svm.predict(x) for x in test_data]
-    #     print(len(predictions), len(test_labels))
-    #     v = [(a, b) for a, b in zip(predictions, test_labels) if a == b]
-    #     print(len(v) / len(test_labels))
+    # print results of training on validation set
+    for lam in [.0001, .001, .01, .1, 1]:
+        svm = SVM(lam, 9, 10)
+        svm.fit(train_data, train_labels)
+        predictions = [svm.predict(x) for x in validation_data]
+        v = [(a, b) for a, b in zip(predictions, validation_labels) if a == b]
+        print(len(v) / len(validation_labels))
+        # pprint(svm.accuracy)
 
-    svm = SVM(1, 5, 10)
-    data = np.concatenate((train_data, test_data))
-    labels = np.concatenate((train_labels, test_labels))
+    # # takes lambda, m, n for calculating eta (learning rate)
+    # svm = SVM(1, 1, 2)
+    # data = np.concatenate((train_data, validation_data))
+    # labels = np.concatenate((train_labels, validation_labels))
 
-    svm.fancy_fit(data, labels, num_seasons=100)
-    real_test_data = load_test_data('test.txt', False)
-    generate_submission(svm, real_test_data)
+    # svm.fancy_fit(data, labels, num_seasons=50)
+    # real_test_data = load_test_data('test.txt', False)
+    # generate_submission(svm, real_test_data)
 
 
 if __name__ == "__main__":
