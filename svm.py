@@ -115,7 +115,6 @@ def signof(val):
 # svm classifier
 ###############################################################################
 
-
 class SVM:
     def __init__(self, lam, m=1, n=2):
         self.lam = lam
@@ -148,8 +147,8 @@ class SVM:
             grad_b = -y
         return grad_a, grad_b
 
-    def step(self, x_batch, y_batch, a, b, step_number):
-        grad_a, grad_b = self.gradient_of_cost(x_batch, y_batch, a, b)
+    def step(self, features, label, a, b, step_number):
+        grad_a, grad_b = self.gradient_of_cost(features, label, a, b)
         a_new = a - self.eta(step_number) * grad_a
         b_new = b - self.eta(step_number) * grad_b
         return (a_new, b_new)
