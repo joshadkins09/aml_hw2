@@ -3,6 +3,7 @@
 import fileinput
 import random
 import sys
+from pprint import pprint
 
 import numpy as np
 
@@ -127,8 +128,8 @@ class SVM:
         self.accuracy = list()
 
     def reset(self):
-        self.a = 0
-        self.b = 0
+        self.a = self.a_initial
+        self.b = self.b_initial
         self.accuracy = list()
 
     def f(self, x):
@@ -137,20 +138,20 @@ class SVM:
     def eta(self, current_step):
         return (self.m / (current_step + self.n))
 
-    def gradient_of_cost(self, x, y, a, b):
+    def gradient_of_cost(self, x, y):
         v = y * self.f(x)
         if v >= 1:
-            grad_a = self.lam * a
+            grad_a = self.lam * self.a
             grad_b = 0
         else:
-            grad_a = self.lam * a - (y * x)
+            grad_a = self.lam * self.a - (y * x)
             grad_b = -y
         return grad_a, grad_b
 
-    def step(self, features, label, a, b, step_number):
-        grad_a, grad_b = self.gradient_of_cost(features, label, a, b)
-        a_new = a - self.eta(step_number) * grad_a
-        b_new = b - self.eta(step_number) * grad_b
+    def step(self, features, label, step_number):
+        grad_a, grad_b = self.gradient_of_cost(features, label)
+        a_new = self.a - self.eta(step_number) * grad_a
+        b_new = self.b - self.eta(step_number) * grad_b
         return (a_new, b_new)
 
     def search_for_min_cost_params(self,
@@ -161,16 +162,15 @@ class SVM:
                                    holdout_labels=None,
                                    sac=None):
         n = random.randint(0, len(data) - 1)
-        self.a, self.b = self.step(data[n], labels[n], self.a, self.b, step)
+        self.a, self.b = self.step(data[n], labels[n], step)
 
         if sac is not None:
             if step % 30 == 0:
-                acc = self.measure_accuracy(self.a, self.b, holdout_data,
-                                            holdout_labels)
+                acc = self.measure_accuracy(holdout_data, holdout_labels)
                 sac.append(acc)
             self.accuracy.append(sac)
 
-    def measure_accuracy(self, a, b, holdout_data, holdout_labels):
+    def measure_accuracy(self, holdout_data, holdout_labels):
         signs = [signof(self.f(d)) for d in holdout_data]
         num_matches = [(i, j) for i, j in zip(signs, holdout_labels) if i == j]
         return (len(num_matches) / len(holdout_labels))
@@ -181,21 +181,18 @@ class SVM:
                               num_seasons=50,
                               num_steps=300):
         self.reset()
-        self.a = self.a * np.zeros([len(train_data[0])])
-
         zipped = list(zip(train_data, train_labels))
         for season in range(num_seasons):
             sac = list()
             np.random.shuffle(zipped)
             holdout_data, holdout_labels = zip(*zipped[:50])
             data, labels = zip(*zipped[50:])
-
             for step in range(num_steps):
                 self.search_for_min_cost_params(
                     data, labels, step, holdout_data, holdout_labels, sac)
 
     def fit(self, train_data, train_labels, num_seasons=50, num_steps=300):
-        self.a = self.a * np.zeros([len(train_data[0])])
+        self.reset()
         for season in range(num_seasons):
             data, labels = train_data, train_labels
             for step in range(num_steps):
@@ -238,21 +235,26 @@ def fit_and_predict_real_data(train_data, train_labels, v_data, v_labels):
 
 def iter_lambda(train_data, train_labels, v_data, v_labels):
     svm = SVM(1, 1, 2)
+    accs = dict()
     print(svm.a_initial, svm.b_initial)
-    for lam in [.0001, .001, .01, .1, 1]:
+    # for lam in [.001, .01, .1, 1]:
+    for lam in [1]:
         svm.lam = lam
         svm.fit_with_measurements(train_data, train_labels)
+        accs[lam] = svm.accuracy
         predictions = [svm.predict(x) for x in v_data]
-        v = [(a, b) for a, b in zip(predictions, v_labels) if a == b]
-        print(len(v) / len(v_labels))
+        v = [(i, j) for i, j in zip(predictions, v_labels) if i == j]
+        # print(len(v) / len(v_labels))
+    # pprint(accs)
+    pprint(accs[1][:305])
 
 
 def main():
     train_labels, train_data, v_labels, v_data = load_train_data(
         'train.txt', True)
 
-    # iter_lambda(train_data, train_labels, v_data, v_labels)
-    fit_and_predict_real_data(train_data, train_labels, v_data, v_labels)
+    iter_lambda(train_data, train_labels, v_data, v_labels)
+    # fit_and_predict_real_data(train_data, train_labels, v_data, v_labels)
 
 
 if __name__ == "__main__":
