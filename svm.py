@@ -172,9 +172,9 @@ class SVM:
             self.accuracy.append(sac)
 
     def measure_accuracy(self, a, b, holdout_data, holdout_labels):
-        res = [signof(self.f(d)) for c, d in enumerate(holdout_data)]
-        j = [(i, j) for i, j in zip(res, holdout_labels) if i == j]
-        return (len(j) / len(holdout_labels))
+        signs = [signof(self.f(d)) for d in holdout_data]
+        num_matches = [(i, j) for i, j in zip(signs, holdout_labels) if i == j]
+        return (len(num_matches) / len(holdout_labels))
 
     def fit_with_measurements(self,
                               train_data,
