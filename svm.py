@@ -116,6 +116,7 @@ def signof(val):
 # svm classifier
 ###############################################################################
 
+
 class SVM:
     def __init__(self, lam, m=1, n=2):
         self.lam = lam
@@ -126,6 +127,7 @@ class SVM:
         self.a = self.a_initial
         self.b = self.b_initial
         self.accuracy = list()
+        self.weight_norm = list()
 
     def reset(self):
         self.a = self.a_initial
@@ -136,7 +138,8 @@ class SVM:
         return np.dot(self.a, x) + self.b
 
     def eta(self, current_step):
-        return (self.m / (current_step + self.n))
+        return 1/((0.01*current_step) + 50)
+        # return (self.m / (current_step + self.n))
 
     def gradient_of_cost(self, x, y):
         v = y * self.f(x)
@@ -160,15 +163,17 @@ class SVM:
                                    step,
                                    holdout_data=None,
                                    holdout_labels=None,
-                                   sac=None):
+                                   season_accuracy=None,
+                                   season_weights=None):
         n = random.randint(0, len(data) - 1)
         self.a, self.b = self.step(data[n], labels[n], step)
 
-        if sac is not None:
+        if season_accuracy is not None:
             if step % 30 == 0:
                 acc = self.measure_accuracy(holdout_data, holdout_labels)
-                sac.append(acc)
-            self.accuracy.append(sac)
+                season_accuracy.append(acc)
+                self.accuracy.append(season_accuracy)
+                self.weight_norm.append(np.linalg.norm(self.a))
 
     def measure_accuracy(self, holdout_data, holdout_labels):
         signs = [signof(self.f(d)) for d in holdout_data]
@@ -183,13 +188,16 @@ class SVM:
         self.reset()
         zipped = list(zip(train_data, train_labels))
         for season in range(num_seasons):
-            sac = list()
+            season_accuracy = list()
+            season_weights = list()
             np.random.shuffle(zipped)
             holdout_data, holdout_labels = zip(*zipped[:50])
             data, labels = zip(*zipped[50:])
             for step in range(num_steps):
-                self.search_for_min_cost_params(
-                    data, labels, step, holdout_data, holdout_labels, sac)
+                self.search_for_min_cost_params(data, labels, step,
+                                                holdout_data, holdout_labels,
+                                                season_accuracy,
+                                                season_weights)
 
     def fit(self, train_data, train_labels, num_seasons=50, num_steps=300):
         self.reset()
@@ -234,19 +242,20 @@ def fit_and_predict_real_data(train_data, train_labels, v_data, v_labels):
 
 
 def iter_lambda(train_data, train_labels, v_data, v_labels):
-    svm = SVM(1, 1, 2)
+    svm = SVM(.01, 6, 10)
     accs = dict()
+    weights = dict()
     print(svm.a_initial, svm.b_initial)
-    # for lam in [.001, .01, .1, 1]:
-    for lam in [1]:
+    for lam in [.001, .01, .1, 1]:
         svm.lam = lam
         svm.fit_with_measurements(train_data, train_labels)
         accs[lam] = svm.accuracy
+        weights[lam] = svm.weight_norm
         predictions = [svm.predict(x) for x in v_data]
         v = [(i, j) for i, j in zip(predictions, v_labels) if i == j]
-        # print(len(v) / len(v_labels))
-    # pprint(accs)
-    pprint(accs[1][:305])
+        print(len(v) / len(v_labels))
+    pprint(accs[1])
+    pprint(weights[1])
 
 
 def main():
