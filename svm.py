@@ -88,7 +88,6 @@ def load_test_data(filename, include_labels=True):
 ###############################################################################
 
 
-# could use sklearn.preprocessing.scale for this -jadkins
 def preprocess(data):
     mean = np.mean(data, axis=0)
     centered = data - mean
@@ -98,17 +97,12 @@ def preprocess(data):
 
 
 ###############################################################################
+# misc utils
+###############################################################################
 
 
 def f(x, a, b):
     return np.multiply(a, x) + b
-
-
-# not sure if we ever need the cost function -jadkins
-# def cost_function(x, y, a, b):
-#     foo = 1 - np.dot(y, f(x, a, b))
-#     r1 = np.maximum(0, foo)
-#     return r1
 
 
 def signof(val):
@@ -117,10 +111,13 @@ def signof(val):
     return 1
 
 
-class SVM:
-    num_seasons = 50
+###############################################################################
+# svm classifier
+###############################################################################
 
-    def __init__(self, lam, m=6, n=10):
+
+class SVM:
+    def __init__(self, lam, m=1, n=2):
         self.lam = lam
         self.m = m
         self.n = n
@@ -139,10 +136,8 @@ class SVM:
         return np.dot(self.a, x) + self.b
 
     def eta(self, current_step):
-        # return .1
         return (self.m / (current_step + self.n))
 
-    # this may be private
     def gradient_of_cost(self, x, y, a, b):
         v = y * self.f(x)
         if v >= 1:
@@ -154,65 +149,58 @@ class SVM:
         return grad_a, grad_b
 
     def step(self, x_batch, y_batch, a, b, step_number):
-        # c = cost_function(x_batch, y_batch, a=a, b=b)
         grad_a, grad_b = self.gradient_of_cost(x_batch, y_batch, a, b)
         a_new = a - self.eta(step_number) * grad_a
         b_new = b - self.eta(step_number) * grad_b
         return (a_new, b_new)
 
-    # def at_each_step(self):
-    #     n = random.randint(0, len(x) - 1)  # Batch size of 1.
-    #     a_est, b_est = step(x[n], y[n], a_est, b_est, lam, eta)
-    #     # Normally we wouldn't collect cost and parameters every iteration,
-    #     # but this is a very simple function to learn.
-    #     all_a_est.append(a_est)
-    #     all_b_est.append(b_est)
-    #     # This is the batch training cost...this should be fixed to be
-    #     # validation set.
-    #     all_costs.append(math.log(cost_function(x, y, a=a_est, b=b_est)))
+    def search_for_min_cost_params(self,
+                                   data,
+                                   labels,
+                                   step,
+                                   holdout_data=None,
+                                   holdout_labels=None,
+                                   sac=None):
+        n = random.randint(0, len(data) - 1)
+        self.a, self.b = self.step(data[n], labels[n], self.a, self.b, step)
+
+        if sac is not None:
+            if step % 30 == 0:
+                acc = self.measure_accuracy(self.a, self.b, holdout_data,
+                                            holdout_labels)
+                sac.append(acc)
+            self.accuracy.append(sac)
 
     def measure_accuracy(self, a, b, holdout_data, holdout_labels):
         res = [signof(self.f(d)) for c, d in enumerate(holdout_data)]
         j = [(i, j) for i, j in zip(res, holdout_labels) if i == j]
         return (len(j) / len(holdout_labels))
 
-    # NOTE: before turning in, need to separate out sgd from fit -jadkins
-    def fit(self, train_data, train_labels, num_seasons=50, num_steps=300):
+    def fit_with_measurements(self,
+                              train_data,
+                              train_labels,
+                              num_seasons=50,
+                              num_steps=300):
         self.reset()
         self.a = self.a * np.zeros([len(train_data[0])])
 
         zipped = list(zip(train_data, train_labels))
         for season in range(num_seasons):
             sac = list()
-            # definitely should make sure that all this wizardry works -jadkins
             np.random.shuffle(zipped)
             holdout_data, holdout_labels = zip(*zipped[:50])
             data, labels = zip(*zipped[50:])
+
             for step in range(num_steps):
-                # could compute len(data) outside -jadkins
-                n = random.randint(0, len(data) - 1)  # Batch size of 1.
-                self.a, self.b = self.step(data[n], labels[n], self.a, self.b,
-                                           step)
+                self.search_for_min_cost_params(
+                    data, labels, step, holdout_data, holdout_labels, sac)
 
-                if step % 30 == 0:
-                    acc = self.measure_accuracy(self.a, self.b, holdout_data,
-                                                holdout_labels)
-                    sac.append(acc)
-            self.accuracy.append(sac)
-
-    def fancy_fit(self,
-                  train_data,
-                  train_labels,
-                  num_seasons=50,
-                  num_steps=300):
+    def fit(self, train_data, train_labels, num_seasons=50, num_steps=300):
         self.a = self.a * np.zeros([len(train_data[0])])
         for season in range(num_seasons):
             data, labels = train_data, train_labels
             for step in range(num_steps):
-                # could compute len(data) outside -jadkins
-                n = random.randint(0, len(data) - 1)  # Batch size of 1.
-                self.a, self.b = self.step(data[n], labels[n], self.a, self.b,
-                                           step)
+                self.search_for_min_cost_params(data, labels, step)
 
     def predict(self, test_data):
         return signof(self.f(test_data))
@@ -235,34 +223,37 @@ def generate_submission(clf, data):
             sub.write('{}\n'.format(r))
 
 
-def main():
-    # print('running')
-    train_labels, train_data, validation_labels, validation_data = load_train_data(
-        'train.txt', True)
-
-    # this is for seeing accuracy with varied lambda
-    # svm = SVM(1, 1, 2)
-    # print(svm.a_initial, svm.b_initial)
-    # # print results of training on validation set
-    # for lam in [.0001, .001, .01, .1, 1]:
-    #     svm.lam = lam
-    #     svm.fit(train_data, train_labels)
-    #     predictions = [svm.predict(x) for x in validation_data]
-    #     v = [(a, b) for a, b in zip(predictions, validation_labels) if a == b]
-    #     print(len(v) / len(validation_labels))
-    #     # pprint(svm.accuracy)
-
-    # this is for the submission.txt
-    # takes lambda, m, n for calculating eta (learning rate)
+def fit_and_predict_real_data(train_data, train_labels, v_data, v_labels):
     svm = SVM(.001, 1, 2)
-    svm.a = np.array([0.77939948, 0.85269224, 0.21391138, 0.88460607, 0.47162305, 0.54078254])
+    svm.a = np.array([
+        0.77939948, 0.85269224, 0.21391138, 0.88460607, 0.47162305, 0.54078254
+    ])
     svm.b = 0.03354322864033388
-    data = np.concatenate((train_data, validation_data))
-    labels = np.concatenate((train_labels, validation_labels))
+    data = np.concatenate((train_data, v_data))
+    labels = np.concatenate((train_labels, v_labels))
 
-    svm.fancy_fit(data, labels, num_seasons=50)
+    svm.fit(data, labels, num_seasons=50)
     real_test_data = load_test_data('test.txt', False)
     generate_submission(svm, real_test_data)
+
+
+def iter_lambda(train_data, train_labels, v_data, v_labels):
+    svm = SVM(1, 1, 2)
+    print(svm.a_initial, svm.b_initial)
+    for lam in [.0001, .001, .01, .1, 1]:
+        svm.lam = lam
+        svm.fit_with_measurements(train_data, train_labels)
+        predictions = [svm.predict(x) for x in v_data]
+        v = [(a, b) for a, b in zip(predictions, v_labels) if a == b]
+        print(len(v) / len(v_labels))
+
+
+def main():
+    train_labels, train_data, v_labels, v_data = load_train_data(
+        'train.txt', True)
+
+    # iter_lambda(train_data, train_labels, v_data, v_labels)
+    fit_and_predict_real_data(train_data, train_labels, v_data, v_labels)
 
 
 if __name__ == "__main__":
